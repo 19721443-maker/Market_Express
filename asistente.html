@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Express Asistente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-dark: #1a1f30;
+            --card-dark: #232a3f;
+            --color-light: #ede6dc;
+            --color-beige: #decab0;
+            --color-gold: #ad9367;
+        }
+        body { background-color: var(--bg-dark); color: var(--color-light); font-family: system-ui, sans-serif; }
+        .scanner-frame { border: 2px solid var(--color-gold); border-radius: 16px; overflow: hidden; position: relative; }
+        .scanner-line {
+            position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
+            animation: scan 2.5s infinite ease-in-out;
+        }
+        @keyframes scan { 0% { top: 0%; } 50% { top: 95%; } 100% { top: 0%; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4">
+
+    <!-- CABECERA DE LA APP -->
+    <header class="bg-[#232a3f] p-3 rounded-2xl border border-[#ad9367]/30 shadow-lg flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <img src="logo.jpg" alt="Logo" class="w-10 h-10 rounded-xl object-cover border border-[#ad9367]" onerror="this.src='https://via.placeholder.com/40/29314a/decab0?text=ME'">
+            <div>
+                <h1 class="font-bold text-base text-[#ede6dc]">Market Express</h1>
+                <p class="text-xs text-[#decab0]">Asistente de Efectivo IA</p>
+            </div>
+        </div>
+        <span id="status-tag" class="text-[10px] bg-green-500/20 text-green-400 px-2.5 py-1 rounded-full font-semibold border border-green-500/30">
+            En línea
+        </span>
+    </header>
+
+    <main class="my-auto py-3">
+        <!-- CONFIGURACIÓN DE IP (PUNTO DE ACCESO MÓVIL) -->
+        <div class="mb-3 bg-[#232a3f] p-3 rounded-xl border border-[#ad9367]/30">
+            <label class="text-xs text-[#decab0] block mb-1 font-semibold">
+                <i class="fa-solid fa-signal"></i> IP Zona Wi-Fi Teléfono:
+            </label>
+            <input type="text" id="server-ip" value="10.224.191.135" class="w-full bg-[#1a1f30] border border-[#ad9367]/50 rounded-lg p-2 text-xs text-[#ede6dc] focus:outline-none font-mono" onchange="guardarIP()">
+        </div>
+
+        <!-- VISOR CÁMARA -->
+        <div class="scanner-frame bg-[#232a3f] aspect-[4/3] w-full flex flex-col items-center justify-center relative shadow-2xl">
+            <img id="photo-preview" class="w-full h-full object-cover hidden" alt="Captura">
+            <div id="cam-placeholder" class="text-center p-4">
+                <i class="fa-solid fa-camera text-4xl text-[#ad9367] mb-2"></i>
+                <p class="text-xs text-[#decab0]">Toma una foto al dinero recibido</p>
+            </div>
+            <div id="laser-line" class="scanner-line hidden"></div>
+        </div>
+
+        <input type="file" id="native-camera-input" accept="image/*" capture="environment" class="hidden" onchange="procesarFotoNativa(event)">
+
+        <!-- BOTÓN DE ESCANEO -->
+        <div class="mt-4">
+            <button onclick="document.getElementById('native-camera-input').click()" class="w-full bg-gradient-to-r from-[#decab0] to-[#ad9367] text-[#1a1f30] font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
+                <i class="fa-solid fa-camera"></i>
+                <span>Escanear Efectivo con IA</span>
+            </button>
+        </div>
+
+        <!-- RESULTADO ANALIZADO POR GEMINI -->
+        <div id="result-box" class="mt-3 bg-[#232a3f] p-4 rounded-xl border border-[#ad9367]/30 hidden">
+            <div class="flex justify-between items-center">
+                <span class="text-xs text-[#decab0]">Efectivo Detectado:</span>
+                <span id="detected-total" class="text-2xl font-extrabold text-[#ad9367]">$0.00</span>
+            </div>
+            <p class="text-[11px] text-green-400 mt-2 text-center font-semibold">
+                <i class="fa-solid fa-circle-check"></i> Enviado a la caja registradora
+            </p>
+        </div>
+    </main>
+
+    <footer class="text-center text-[10px] text-[#decab0]/60 py-1">
+        Market Express Mobile Assistant v1.0
+    </footer>
+
+    <script>
+        const photoPreview = document.getElementById('photo-preview');
+        const camPlaceholder = document.getElementById('cam-placeholder');
+        const laserLine = document.getElementById('laser-line');
+        const ipInput = document.getElementById('server-ip');
+
+        // Guardar o cargar IP
+        window.onload = function() {
+            const savedIP = localStorage.getItem('server_ip_wifi') || '10.224.191.135';
+            ipInput.value = savedIP;
+        };
+
+        function guardarIP() {
+            localStorage.setItem('server_ip_wifi', ipInput.value.trim());
+        }
+
+        function procesarFotoNativa(event) {
+            const ip = ipInput.value.trim() || '10.224.191.135';
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Image = e.target.result;
+                    photoPreview.src = base64Image;
+                    photoPreview.classList.remove('hidden');
+                    camPlaceholder.classList.add('hidden');
+                    laserLine.classList.remove('hidden');
+
+                    enviarAProcesarIA(base64Image, ip);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function enviarAProcesarIA(base64Image, ip) {
+            document.getElementById('result-box').classList.add('hidden');
+            
+            fetch(`http://${ip}/Market_express/procesar_ia.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imagen: base64Image })
+            })
+            .then(res => res.json())
+            .then(data => {
+                laserLine.classList.add('hidden');
+                if (data.exito) {
+                    document.getElementById('detected-total').innerText = '$' + parseFloat(data.total).toFixed(2);
+                    document.getElementById('result-box').classList.remove('hidden');
+                } else {
+                    alert('Error en IA: ' + (data.error || 'No se pudo procesar la imagen'));
+                }
+            })
+            .catch(err => {
+                laserLine.classList.add('hidden');
+                alert(`No se pudo conectar con la PC en http://${ip}/Market_express/. Asegúrate de que XAMPP esté corriendo en la laptop.`);
+            });
+        }
+    </script>
+</body>
+</html>
